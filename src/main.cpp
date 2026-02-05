@@ -1,6 +1,8 @@
 #include "world.hpp"
 #include "camera.hpp"
 #include "shader.hpp"
+#include "glfw.hpp"
+#include "window.hpp"
 #include <glad/gl.h>
 #include <GLFW/glfw3.h>
 #include <stb_image.h>
@@ -92,73 +94,6 @@ auto load_blocks_texture() -> std::optional<unsigned> {
   return texture_id;
 }
 
-// RAII wrapper for GLFW initialization and termination
-class Glfw {
-public:
-  Glfw() {
-    if (s_initialized)
-      throw std::logic_error{"ERROR::GLFW: GLFW already initialized"};
-
-    if (glfwInit() == GLFW_FALSE)
-      throw std::runtime_error{"ERROR::GLFW: Failed to initialize GLFW"};
-    
-    s_initialized = true;
-  }
-
-  ~Glfw() noexcept {
-    glfwTerminate();
-    s_initialized = false;
-  }
-
-  Glfw(const Glfw&) = delete;
-  Glfw& operator=(const Glfw&) = delete;
-  Glfw(Glfw&&) = delete;
-  auto operator=(Glfw&&) = delete;
-
-private:
-  inline static bool s_initialized = false;
-};
-
-// RAII wrapper for GLFW window
-class Window {
-public:
-  Window(int width, int height, const char* title) {
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 1);
-    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-    m_handle = glfwCreateWindow(width, height, title, nullptr, nullptr);
-    if (!m_handle)
-      throw std::runtime_error{"ERROR::GLFW: Failed to create window"};
-
-    glfwMakeContextCurrent(m_handle);
-  }
-
-  ~Window() noexcept {
-    if (m_handle) {
-      glfwDestroyWindow(m_handle);
-    }
-  }
-
-  Window(const Window&) = delete;
-  Window& operator=(const Window&) = delete;
-
-  Window(Window&& other) noexcept : m_handle{other.m_handle} {
-    other.m_handle = nullptr;
-  }
-
-  auto operator=(Window&& other) noexcept -> Window& {
-    std::swap(m_handle, other.m_handle);
-    return *this;
-  }
-
-  auto get() const noexcept -> GLFWwindow*{ 
-    return m_handle; 
-  }
-
-private:
-  GLFWwindow* m_handle{nullptr};
-};
-
 auto main() -> int {
   auto glfw = Glfw{};
   auto window = Window{g_window_width, g_window_height, "Minecraft Clone"};
@@ -170,7 +105,7 @@ auto main() -> int {
   
   auto version = gladLoadGL(glfwGetProcAddress);
   if (version == 0) {
-    std::println("ERROR::GLAD: Failed to initialize GLAD");
+    std::println(std::cerr, "ERROR::GLAD: Failed to initialize GLAD");
     return -1;
   }
   
@@ -179,7 +114,7 @@ auto main() -> int {
 
   auto blocks_texture = load_blocks_texture();
   if (!blocks_texture) {
-    std::println("ERROR::TEXTURE: Failed to load blocks texture");
+    std::println(std::cerr, "ERROR::TEXTURE: Failed to load blocks texture");
     return -1;
   }
   
