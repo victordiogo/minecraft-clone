@@ -120,7 +120,7 @@ auto main() -> int {
   
   auto shader = Shader{"../shaders/chunk.vert", "../shaders/chunk.frag"};
 
-  auto world = World{3289, g_camera.position, 6};
+  auto world = World{3289, g_camera.position, 10};
   
   auto last_time = glfwGetTime();
   auto last_fps_time = glfwGetTime();
