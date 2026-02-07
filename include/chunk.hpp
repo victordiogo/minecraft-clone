@@ -51,8 +51,8 @@ struct Chunk {
   // if neighboring chunk is not visible, pass nullptr
   auto generate_vertices(
     const Coord& coord, 
-    const Chunk* north_chunk, const Chunk* south_chunk, 
-    const Chunk* east_chunk, const Chunk* west_chunk) -> void;
+    const Chunk* north_chunk = nullptr, const Chunk* south_chunk = nullptr, 
+    const Chunk* east_chunk = nullptr, const Chunk* west_chunk = nullptr) -> void;
 };
 
 inline auto operator==(const Chunk::Coord& a, const Chunk::Coord& b) -> bool {
