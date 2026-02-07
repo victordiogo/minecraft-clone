@@ -1,9 +1,10 @@
 #ifndef CAMERA_HPP
 #define CAMERA_HPP
 
-#include <glm/vec3.hpp>
 #include <glm/mat4x4.hpp>
+#include <glm/vec3.hpp>
 #include <glm/gtc/matrix_transform.hpp>
+#include <glm/trigonometric.hpp>
 #include <stdexcept>
 
 enum class Movement {
@@ -16,7 +17,19 @@ enum class Movement {
 class Camera {
 public:
   glm::vec3 position;
+private:
+  glm::vec3 m_front;
+  glm::vec3 m_up;
+  glm::vec3 m_right;
+  float m_pitch; // angle in degrees around the X axis
+  float m_yaw; // angle in degrees around the Y axis
+  float m_sensitivity;
+  float m_vertical_fov; // in degrees
+  float m_aspect_ratio;
+  float m_near;
+  float m_far;
 
+public:
   Camera(const glm::vec3& position, float pitch, float yaw, 
          float sensitivity, float vertical_fov, float aspect_ratio, 
          float near = 0.1f, float far = 1000.0f)
@@ -58,6 +71,10 @@ public:
     return glm::perspective(glm::radians(m_vertical_fov), m_aspect_ratio, m_near, m_far);
   }
 
+  auto front() const -> const glm::vec3& {
+    return m_front;
+  }
+
   auto set_aspect_ratio(float aspect_ratio) -> void {
     if (aspect_ratio <= 0.0f)
       throw std::out_of_range{"Camera aspect ratio must be greater than 0"};
@@ -87,17 +104,6 @@ public:
   }
   
 private:
-  glm::vec3 m_front;
-  glm::vec3 m_up;
-  glm::vec3 m_right;
-  float m_pitch; // angle in degrees around the X axis
-  float m_yaw; // angle in degrees around the Y axis
-  float m_sensitivity;
-  float m_vertical_fov; // in degrees
-  float m_aspect_ratio;
-  float m_near;
-  float m_far;
-  
   auto update_vectors() -> void {
     m_front.x = std::cos(glm::radians(m_yaw)) * std::cos(glm::radians(m_pitch));
     m_front.y = std::sin(glm::radians(m_pitch));

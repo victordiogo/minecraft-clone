@@ -2,7 +2,6 @@
 #define TERRAIN_GENERATOR_HPP
 
 #include "chunk.hpp"
-#include "chunk_coord.hpp"
 #include <FastNoise/FastNoise.h>
 #include <cmath>
 #include <algorithm>
@@ -23,10 +22,11 @@ public:
     m_height_noise->SetGain(0.5f);
   }
 
-  auto generate_chunk(const ChunkCoord& coord) -> Chunk {
+  auto generate_chunk(const Chunk::Coord& coord) -> Chunk {
     auto chunk = Chunk{};
+    chunk.blocks.resize(Chunk::size * Chunk::height * Chunk::size);
 
-    // height
+    // heightmap
     for (auto x = 0; x < Chunk::size; ++x) {
       for (auto z = 0; z < Chunk::size; ++z) {
         auto world_x = (float)(coord.x * Chunk::size + x);
@@ -38,12 +38,18 @@ public:
 
         auto height = std::clamp((int)(h * Chunk::height), 1, Chunk::height - 1);
 
+        // Fill ground
         for (auto y = 0; y < height; ++y) {
           if (y < height - 5) {
             chunk[x, y, z] = Block::stone;
           } else {
             chunk[x, y, z] = Block::dirt;
           }
+        }
+
+        // Fill air above
+        for (auto y = height; y < Chunk::height; ++y) {
+          chunk[x, y, z] = Block::air;
         }
 
         chunk[x, height, z] = Block::grass;

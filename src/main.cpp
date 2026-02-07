@@ -70,10 +70,10 @@ auto mouse_button_callback(GLFWwindow* window, int button, int action, int) -> v
   }
 }
 
-auto load_blocks_texture() -> std::optional<unsigned> {
+auto load_blocks_texture() -> unsigned {
   int width, height, num_channels;
   auto* data = stbi_load("../assets/blocks.png", &width, &height, &num_channels, 0);
-  if (!data) return {};
+  if (!data) throw std::runtime_error{"ERROR::TEXTURE: Failed to load texture image"};
 
   unsigned texture_id;
   glGenTextures(1, &texture_id);
@@ -111,16 +111,14 @@ auto main() -> int {
   
   glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
   glEnable(GL_DEPTH_TEST);
+  glEnable(GL_CULL_FACE);
+  glCullFace(GL_BACK);
 
   auto blocks_texture = load_blocks_texture();
-  if (!blocks_texture) {
-    std::println(std::cerr, "ERROR::TEXTURE: Failed to load blocks texture");
-    return -1;
-  }
   
   auto shader = Shader{"../shaders/chunk.vert", "../shaders/chunk.frag"};
 
-  auto world = World{3289, g_camera.position, 10};
+  auto world = World{3289, 20, g_camera.position, g_camera.front()};
   
   auto last_time = glfwGetTime();
   auto last_fps_time = glfwGetTime();
@@ -137,12 +135,12 @@ auto main() -> int {
 
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-    world.update(g_camera.position);
+    world.update(g_camera.position, g_camera.front());
 
     shader.use();
     auto projection_view = g_camera.projection_matrix() * g_camera.view_matrix();
     shader.set_uniform("u_projection_view", projection_view);
-    glBindTexture(GL_TEXTURE_2D_ARRAY, *blocks_texture);
+    glBindTexture(GL_TEXTURE_2D_ARRAY, blocks_texture);
     world.draw();
 
     glfwSwapBuffers(window.get());

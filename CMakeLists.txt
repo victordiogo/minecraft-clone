@@ -5,7 +5,7 @@ set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-set(program_executable_name ${CMAKE_PROJECT_NAME})
+set(program_name ${CMAKE_PROJECT_NAME})
 
 file(GLOB_RECURSE src_files CONFIGURE_DEPENDS src/*.cpp)
 
@@ -51,7 +51,7 @@ FetchContent_MakeAvailable(glfw glm unordered_dense fast_noise_2)
 add_subdirectory(external/glad)
 add_subdirectory(external/stb_image)
 
-add_executable(${program_executable_name} ${src_files})
-target_include_directories(${program_executable_name} PRIVATE include)
-target_compile_options(${program_executable_name} PRIVATE ${compile_options})
-target_link_libraries(${program_executable_name} PRIVATE glfw glm glad unordered_dense stb_image FastNoise)
+add_executable(${program_name} ${src_files})
+target_include_directories(${program_name} PRIVATE include)
+target_compile_options(${program_name} PRIVATE ${compile_options})
+target_link_libraries(${program_name} PRIVATE glfw glm::glm glad unordered_dense stb_image FastNoise)
