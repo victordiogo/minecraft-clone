@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project("minecraft_clone")
+project("minecraft-clone")
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -48,10 +48,10 @@ FetchContent_Declare(
 
 FetchContent_MakeAvailable(glfw glm unordered_dense fast_noise_2)
 
-add_subdirectory(external/glad)
-add_subdirectory(external/stb_image)
+add_subdirectory(lib/glad)
+add_subdirectory(lib/stb_image)
 
 add_executable(${program_name} ${src_files})
-target_include_directories(${program_name} PRIVATE include)
+target_include_directories(${program_name} PRIVATE src)
 target_compile_options(${program_name} PRIVATE ${compile_options})
 target_link_libraries(${program_name} PRIVATE glfw glm::glm glad unordered_dense stb_image FastNoise)

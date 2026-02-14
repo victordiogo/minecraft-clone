@@ -11,7 +11,9 @@ enum class Movement {
   forward,
   backward,
   left,
-  right
+  right,
+  up,
+  down
 };
 
 class Camera {
@@ -84,13 +86,17 @@ public:
   
   auto move(Movement direction, float velocity) -> void {
     if (direction == Movement::forward)
-      position += m_front * velocity;
+      position += glm::normalize(glm::vec3{m_front.x, 0.0f, m_front.z}) * velocity;
     if (direction == Movement::backward)
-      position -= m_front * velocity;
+      position -= glm::normalize(glm::vec3{m_front.x, 0.0f, m_front.z}) * velocity;
     if (direction == Movement::left)
       position -= m_right * velocity;
     if (direction == Movement::right)
       position += m_right * velocity;
+    if (direction == Movement::up)
+      position += glm::vec3{0.0f, 1.0f, 0.0f} * velocity;
+    if (direction == Movement::down)
+      position -= glm::vec3{0.0f, 1.0f, 0.0f} * velocity;
   }
   
   auto rotate(const glm::vec2& offset) -> void {

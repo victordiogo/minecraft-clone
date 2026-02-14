@@ -9,6 +9,7 @@
 #include <optional>
 #include <utility>
 #include <stdexcept>
+#include <format>
 
 inline auto get_file_content(std::ifstream& file) -> std::string {
   file.seekg(0, std::ios::end);
@@ -19,23 +20,32 @@ inline auto get_file_content(std::ifstream& file) -> std::string {
   return contents;
 }
 
-inline auto check_errors(unsigned shader, bool compilation) -> void {
+// parameter shader is true if the id is a shader id or false if it's a program id
+// returns the error message if there was an error, or none if there was no error
+inline auto check_errors(unsigned id, bool shader) -> std::optional<std::string> {
   auto success = 0;
-  if (compilation) {
-    glGetShaderiv(shader, GL_COMPILE_STATUS, &success);
+  if (shader) {
+    glGetShaderiv(id, GL_COMPILE_STATUS, &success);
   } else {
-    glGetProgramiv(shader, GL_LINK_STATUS, &success);
+    glGetProgramiv(id, GL_LINK_STATUS, &success);
   }
-  if (success == 1) return;
+  if (success == 1) return {};
 
   auto info = std::string(1024, '\0');
-  if (compilation) {
-    glGetShaderInfoLog(shader, 1024, nullptr, info.data());
+  if (shader) {
+    glGetShaderInfoLog(id, 1024, nullptr, info.data());
   } else {
-    glGetProgramInfoLog(shader, 1024, nullptr, info.data());
+    glGetProgramInfoLog(id, 1024, nullptr, info.data());
   }
   
-  throw std::runtime_error{"ERROR::SHADER::COMPILATION: " + info};
+  return info;
+}
+
+inline auto create_shader(unsigned type, const char* source) -> unsigned {
+  auto shader = glCreateShader(type);
+  glShaderSource(shader, 1, &source, nullptr);
+  glCompileShader(shader);
+  return shader;
 }
 
 class Shader {
@@ -43,65 +53,54 @@ public:
   Shader(const std::string& vertex_path, const std::string& fragment_path) : m_id{0u} {
     auto vertex_file = std::ifstream{vertex_path};
     if (!vertex_file) 
-      throw std::runtime_error{"ERROR::SHADER: Could not open vertex shader file: " + vertex_path};
+      throw std::runtime_error{"Could not open vertex shader file: " + vertex_path};
 
     auto fragment_file = std::ifstream{fragment_path};
     if (!fragment_file)
-      throw std::runtime_error{"ERROR::SHADER: Could not open fragment shader file: " + fragment_path};
+      throw std::runtime_error{"Could not open fragment shader file: " + fragment_path};
     
     auto vertex_content = get_file_content(vertex_file);
     auto fragment_content = get_file_content(fragment_file);
     
-    auto vertex = glCreateShader(GL_VERTEX_SHADER);
-    auto vertex_code = vertex_content.c_str();
-    glShaderSource(vertex, 1, &vertex_code, nullptr);
-    glCompileShader(vertex);
-    try {
-      check_errors(vertex, true);
-    } catch (...) {
+    auto vertex = create_shader(GL_VERTEX_SHADER, vertex_content.c_str());
+    if (auto error = check_errors(vertex, true)) {
       glDeleteShader(vertex);
-      throw;
+      throw std::runtime_error{"Error when compiling vertex shader file " + vertex_path + ":\n" + *error};
     }
     
-    auto fragment = glCreateShader(GL_FRAGMENT_SHADER);
-    auto fragment_code = fragment_content.c_str();
-    glShaderSource(fragment, 1, &fragment_code, nullptr);
-    glCompileShader(fragment);
-    try {
-      check_errors(fragment, true);
-    } catch (...) {
+    auto fragment = create_shader(GL_FRAGMENT_SHADER, fragment_content.c_str());
+    if (auto error = check_errors(fragment, true)) {
       glDeleteShader(vertex);
       glDeleteShader(fragment);
-      throw;
+      throw std::runtime_error{"Error when compiling fragment shader file " + fragment_path + ":\n" + *error};
     }
 
     m_id = glCreateProgram();
     glAttachShader(m_id, vertex);
     glAttachShader(m_id, fragment);
     glLinkProgram(m_id);
-    try {
-      check_errors(m_id, false);
-    } catch (...) {
+    if (auto error = check_errors(m_id, false)) {
       glDeleteShader(vertex);
       glDeleteShader(fragment);
       glDeleteProgram(m_id);
-      throw;
+      throw std::runtime_error{"Error when linking shader program: " + *error};
     }
 
     glDeleteShader(vertex);
     glDeleteShader(fragment);
   }
+  
+  Shader(Shader&& other) noexcept : m_id{other.m_id} {
+    other.m_id = 0u;
+  }
+
+  Shader(const Shader&) = delete;
 
   ~Shader() noexcept {
     if (m_id != 0u) glDeleteProgram(m_id);
   }
 
-  Shader(const Shader&) = delete;
-  Shader& operator=(const Shader&) = delete;
-
-  Shader(Shader&& other) noexcept : m_id{other.m_id} {
-    other.m_id = 0u;
-  }
+  auto operator=(const Shader&) -> Shader& = delete;
 
   auto operator=(Shader&& other) noexcept -> Shader& {
     std::swap(m_id, other.m_id);

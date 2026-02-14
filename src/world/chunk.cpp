@@ -1,59 +1,33 @@
 #include "chunk.hpp"
+#include <vector>
 
-auto Chunk::generate_vertices(
-  const Coord& coord, 
-  const Chunk* north_chunk, 
-  const Chunk* south_chunk, 
-  const Chunk* east_chunk, 
-  const Chunk* west_chunk) -> void 
+// This function generates a mesh for the given chunk by creating vertices for all visible faces of blocks in the chunk.
+// A visible face is one that is adjacent to an air block.
+auto generate_mesh(const Chunk& chunk, const glm::i32vec2& coord, 
+                   const Chunk& north, const Chunk& south, 
+                   const Chunk& west, const Chunk& east) -> ChunkMesh
 {
-  vertices.clear();
+  auto vertices = std::vector<ChunkMesh::Vertex>{};
 
-  for (auto x = 0; x < size; ++x) {
-    for (auto y = 0; y < height; ++y) {
-      for (auto z = 0; z < size; ++z) {
-        auto block = (*this)[x, y, z];
+  for (auto x = 0; x < Chunk::size; ++x) {
+    for (auto y = 0; y < Chunk::height; ++y) {
+      for (auto z = 0; z < Chunk::size; ++z) {
+        auto block = chunk[x, y, z];
 
         if (block == Block::air)
           continue;
 
         // Check neighboring blocks to determine visible faces
-        auto west_block = Block::air;
-        auto east_block = Block::air;
-        auto north_block = Block::air;
-        auto south_block = Block::air;
-        auto top_block = Block::air;
-        auto bottom_block = Block::air;
+        auto west_block = x > 0 ? chunk[x - 1, y, z] : west[Chunk::size - 1, y, z];
+        auto east_block = x < Chunk::size - 1 ? chunk[x + 1, y, z] : east[0, y, z];
+        auto north_block = z > 0 ? chunk[x, y, z - 1] : north[x, y, Chunk::size - 1];
+        auto south_block = z < Chunk::size - 1 ? chunk[x, y, z + 1] : south[x, y, 0];
+        auto top_block = y < Chunk::height - 1 ? chunk[x, y + 1, z] : Block::air;
+        auto bottom_block = y > 0 ? chunk[x, y - 1, z] : Block::air;
 
-        if (x > 0)
-          west_block = (*this)[x - 1, y, z];
-        else if (west_chunk)
-          west_block = (*west_chunk)[size - 1, y, z];
+        auto offset = glm::vec3{(float)(coord.x * Chunk::size), 0.0f, (float)(coord.y * Chunk::size)};
 
-        if (x < size - 1)
-          east_block = (*this)[x + 1, y, z];
-        else if (east_chunk)
-          east_block = (*east_chunk)[0, y, z];
-
-        if (z > 0)
-          north_block = (*this)[x, y, z - 1];
-        else if (north_chunk)
-          north_block = (*north_chunk)[x, y, size - 1];
-
-        if (z < size - 1)
-          south_block = (*this)[x, y, z + 1];
-        else if (south_chunk)
-          south_block = (*south_chunk)[x, y, 0];
-
-        if (y < height - 1)
-          top_block = (*this)[x, y + 1, z];
-
-        if (y > 0)
-          bottom_block = (*this)[x, y - 1, z];
-
-        auto offset = glm::vec3{(float)(coord.x * size), 0.0f, (float)(coord.z * size)};
-
-        if (west_block == Block::air) {
+        if (west_block == Block::air) { // west face is visible
           auto v0 = ChunkMesh::Vertex{{(float)x, (float)y, (float)z}, {0.0f, 1.0f}, (int)block - 1};
           v0.position += offset;
           auto v1 = ChunkMesh::Vertex{{(float)x, (float)y, (float)(z + 1)}, {1.0f / 3, 1.0f}, (int)block - 1};
@@ -163,4 +137,6 @@ auto Chunk::generate_vertices(
       }
     }
   }
+
+  return ChunkMesh{vertices};
 }

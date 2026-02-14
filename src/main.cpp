@@ -1,8 +1,9 @@
-#include "world.hpp"
+#include "world/world.hpp"
 #include "camera.hpp"
 #include "shader.hpp"
-#include "glfw.hpp"
-#include "window.hpp"
+#include "window/glfw.hpp"
+#include "window/window.hpp"
+#include "frame-monitor.hpp"
 #include <glad/gl.h>
 #include <GLFW/glfw3.h>
 #include <stb_image.h>
@@ -11,69 +12,39 @@
 #include <array>
 #include <optional>
 #include <stdexcept>
-
-constexpr auto g_window_width = 800;
-constexpr auto g_window_height = 600;
-auto g_camera = Camera{{0.0f, 5.0f, 1.0f}, 0.0f, -90.0f, 0.1f, 45.0f, (float)g_window_width / g_window_height};
-auto g_reset_cursor_pos = true;
  
-auto process_input(GLFWwindow* window, float frame_time) -> void {
-  constexpr auto camera_speed = 20.0f;
+auto process_input(const Window& window, Camera& camera, float frame_time) -> void {
+  auto camera_speed = 50.0f;
 
-  if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS) {
-    glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
-    glfwSetCursorPosCallback(window, nullptr);
-  }
-  if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
-    g_camera.move(Movement::forward, camera_speed * frame_time);
-  if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
-    g_camera.move(Movement::backward, camera_speed * frame_time);
-  if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
-    g_camera.move(Movement::left, camera_speed * frame_time);
-  if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
-    g_camera.move(Movement::right, camera_speed * frame_time);
-}
+  if (glfwGetKey(window.get(), GLFW_KEY_ESCAPE) == GLFW_PRESS)
+    glfwSetInputMode(window.get(), GLFW_CURSOR, GLFW_CURSOR_NORMAL);
 
-auto framebuffer_size_callback(GLFWwindow*, int width, int height) -> void {
-  glViewport(0, 0, width, height);
-  g_camera.set_aspect_ratio((float)width / height);
-}
+  if (glfwGetKey(window.get(), GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS)
+    camera_speed *= 2;
 
-auto cursor_pos_callback(GLFWwindow*, double xpos, double ypos) -> void {
-  static double last_x;
-  static double last_y;
+  if (glfwGetKey(window.get(), GLFW_KEY_W) == GLFW_PRESS)
+    camera.move(Movement::forward, camera_speed * frame_time);
 
-  if (g_reset_cursor_pos) {
-    last_x = xpos;
-    last_y = ypos;
-    g_reset_cursor_pos = false;
-    return;
-  }
+  if (glfwGetKey(window.get(), GLFW_KEY_S) == GLFW_PRESS)
+    camera.move(Movement::backward, camera_speed * frame_time);
 
-  auto xoffset = (float)(xpos - last_x);
-  auto yoffset = (float)(last_y - ypos); // reversed since y-coordinates go from bottom to top
+  if (glfwGetKey(window.get(), GLFW_KEY_A) == GLFW_PRESS)
+    camera.move(Movement::left, camera_speed * frame_time);
 
-  last_x = xpos;
-  last_y = ypos;
+  if (glfwGetKey(window.get(), GLFW_KEY_D) == GLFW_PRESS)
+    camera.move(Movement::right, camera_speed * frame_time);
 
-  g_camera.rotate({xoffset, yoffset});
-}
+  if (glfwGetKey(window.get(), GLFW_KEY_SPACE) == GLFW_PRESS)
+    camera.move(Movement::up, camera_speed * frame_time);
 
-auto mouse_button_callback(GLFWwindow* window, int button, int action, int) -> void{
-  if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS) {
-    auto mode = glfwGetInputMode(window, GLFW_CURSOR);
-    if (mode == GLFW_CURSOR_DISABLED)
-      return;
-    glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
-    glfwSetCursorPosCallback(window, cursor_pos_callback);
-    g_reset_cursor_pos = true;
-  }
+  if (glfwGetKey(window.get(), GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS)
+    camera.move(Movement::down, camera_speed * frame_time);
 }
 
 auto load_blocks_texture() -> unsigned {
   int width, height, num_channels;
   auto* data = stbi_load("../assets/blocks.png", &width, &height, &num_channels, 0);
-  if (!data) throw std::runtime_error{"ERROR::TEXTURE: Failed to load texture image"};
+  if (!data) throw std::runtime_error{"Failed to load texture image"};
 
   unsigned texture_id;
   glGenTextures(1, &texture_id);
@@ -86,7 +57,7 @@ auto load_blocks_texture() -> unsigned {
   glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_BASE_LEVEL, 0);
   glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MAX_LEVEL, 4);
 
-  glTexImage3D(GL_TEXTURE_2D_ARRAY, 0, GL_RGBA8, width, height / 3, 3, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
+  glTexImage3D(GL_TEXTURE_2D_ARRAY, 0, GL_SRGB8_ALPHA8, width, height / 7, 7, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
   glGenerateMipmap(GL_TEXTURE_2D_ARRAY);
   
   stbi_image_free(data);
@@ -94,18 +65,46 @@ auto load_blocks_texture() -> unsigned {
   return texture_id;
 }
 
+auto calculate_offset(double x, double y) -> glm::vec2 {
+  static double last_x;
+  static double last_y;
+  static bool first = true;
+
+  if (first) {
+    last_x = x;
+    last_y = y;
+    first = false;
+    return {0.0f, 0.0f};
+  }
+
+  auto offset = glm::vec2{(float)(x - last_x), (float)(last_y - y)}; // reversed y
+  last_x = x;
+  last_y = y;
+  return offset;
+}
+
+auto reset_cursor_pos(GLFWwindow* window) -> void {
+  double x, y;
+  glfwGetCursorPos(window, &x, &y);
+  calculate_offset(x, y); // reset last cursor position to current position
+}
+
+auto create_window() -> Window {
+  glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
+  glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 1);
+  glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+  return Window{800, 600, "Minecraft Clone"};
+}
+
 auto main() -> int {
   auto glfw = Glfw{};
-  auto window = Window{g_window_width, g_window_height, "Minecraft Clone"};
+  auto window = create_window();
 
-  glfwSetFramebufferSizeCallback(window.get(), framebuffer_size_callback);
-  glfwSetCursorPosCallback(window.get(), cursor_pos_callback);
-  glfwSetMouseButtonCallback(window.get(), mouse_button_callback);
   glfwSetInputMode(window.get(), GLFW_CURSOR, GLFW_CURSOR_DISABLED);
   
   auto version = gladLoadGL(glfwGetProcAddress);
   if (version == 0) {
-    std::println(std::cerr, "ERROR::GLAD: Failed to initialize GLAD");
+    std::println(std::cerr, "ERROR: Failed to initialize GLAD");
     return -1;
   }
   
@@ -114,31 +113,45 @@ auto main() -> int {
   glEnable(GL_CULL_FACE);
   glCullFace(GL_BACK);
 
-  auto blocks_texture = load_blocks_texture();
-  
-  auto shader = Shader{"../shaders/chunk.vert", "../shaders/chunk.frag"};
+  auto size = window.size();
+  auto camera = Camera{{0.0f, 5.0f, 1.0f}, 0.0f, -90.0f, 0.1f, 45.0f, (float)size.x / size.y};
 
-  auto world = World{3289, 20, g_camera.position, g_camera.front()};
-  
-  auto last_time = glfwGetTime();
-  auto last_fps_time = glfwGetTime();
-  while (!glfwWindowShouldClose(window.get())) {
-    auto frame_time = glfwGetTime() - last_time;
-    last_time = glfwGetTime();
+  window.set_framebuffer_size_callback([&camera](GLFWwindow*, int width, int height) {
+    glViewport(0, 0, width, height);
+    camera.set_aspect_ratio((float)width / height);
+  });
 
-    process_input(window.get(), (float)frame_time);
+  window.set_cursor_pos_callback([&camera](GLFWwindow* window, double xpos, double ypos) {
+    if (glfwGetInputMode(window, GLFW_CURSOR) != GLFW_CURSOR_DISABLED) return;
+    auto offset = calculate_offset(xpos, ypos);
+    camera.rotate(offset);
+  });
 
-    if (glfwGetTime() - last_fps_time >= 1.0) {
-      last_fps_time = glfwGetTime();
-      glfwSetWindowTitle(window.get(), std::format("FPS: {:.0f}\n", 1.0 / frame_time).c_str());
+  window.set_mouse_button_callback([](GLFWwindow* window, int button, int action, int) {
+    if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS) {
+      if (glfwGetInputMode(window, GLFW_CURSOR) == GLFW_CURSOR_DISABLED) return;
+      glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+      reset_cursor_pos(window);
     }
+  });
+
+  auto blocks_texture = load_blocks_texture();
+  auto shader = Shader{"../shaders/chunk.vert", "../shaders/chunk.frag"};
+  auto world = World{3289, 20};
+  
+  auto frame_monitor = FrameMonitor{};
+  while (!glfwWindowShouldClose(window.get())) {
+    auto frame_time = frame_monitor.tick();
+    glfwSetWindowTitle(window.get(), std::format("FPS: {:.0f}", frame_monitor.fps()).c_str());
+
+    process_input(window, camera, (float)frame_time);
 
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-    world.update(g_camera.position, g_camera.front());
+    world.update(camera.position, camera.front());
 
     shader.use();
-    auto projection_view = g_camera.projection_matrix() * g_camera.view_matrix();
+    auto projection_view = camera.projection_matrix() * camera.view_matrix();
     shader.set_uniform("u_projection_view", projection_view);
     glBindTexture(GL_TEXTURE_2D_ARRAY, blocks_texture);
     world.draw();
