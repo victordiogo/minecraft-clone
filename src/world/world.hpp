@@ -121,6 +121,9 @@ public:
   }
 
   auto ready_to_mesh(const glm::i32vec2& coord) -> bool {
+    auto it = m_chunks.find(coord);
+    if (it == m_chunks.end() || it->second.state < Chunk::State::terrain_generated)
+      return false;
     auto neighbors = get_neighbors(coord);
     for (auto neighbor : neighbors) {
       if (neighbor == m_chunks.end() || neighbor->second.state < Chunk::State::terrain_generated) {
