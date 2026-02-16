@@ -7,28 +7,45 @@
 #include <algorithm>
 #include <cassert>
 
+#include <print>
+
 class TerrainGenerator {
 private:
   int m_seed;
   FastNoise::SmartNode<FastNoise::FractalFBm> m_height_noise;
+  float m_height_noise_max_amplitude;
   FastNoise::SmartNode<FastNoise::Simplex> m_cheese_cave_noise;
+  FastNoise::SmartNode<FastNoise::Simplex> m_spaghetti_cave_noise_0;
+  FastNoise::SmartNode<FastNoise::Simplex> m_spaghetti_cave_noise_1;
 public:
   explicit TerrainGenerator(int seed) 
     : m_seed{seed}, 
       m_height_noise{FastNoise::New<FastNoise::FractalFBm>()},
-      m_cheese_cave_noise{FastNoise::New<FastNoise::Simplex>()}
+      m_cheese_cave_noise{FastNoise::New<FastNoise::Simplex>()},
+      m_spaghetti_cave_noise_0{FastNoise::New<FastNoise::Simplex>()},
+      m_spaghetti_cave_noise_1{FastNoise::New<FastNoise::Simplex>()}
   {
     auto base = FastNoise::New<FastNoise::Simplex>();
     base->SetSeedOffset(0);
     base->SetScale(2000.0f);
 
+    auto h_octaves = 5;
+    auto h_gain = 0.5f;
     m_height_noise->SetSource(base);
-    m_height_noise->SetOctaveCount(5);
+    m_height_noise->SetOctaveCount(h_octaves);
     m_height_noise->SetLacunarity(2.0f);
-    m_height_noise->SetGain(0.5f);
+    m_height_noise->SetGain(h_gain);
+
+    m_height_noise_max_amplitude = (1.0f - std::pow(h_gain, h_octaves)) / (1.0f - h_gain);
 
     m_cheese_cave_noise->SetSeedOffset(1000);
-    m_cheese_cave_noise->SetScale(100.0f);
+    m_cheese_cave_noise->SetScale(250.0f);
+
+    m_spaghetti_cave_noise_0->SetSeedOffset(2000);
+    m_spaghetti_cave_noise_0->SetScale(500.0f);
+
+    m_spaghetti_cave_noise_1->SetSeedOffset(3000);
+    m_spaghetti_cave_noise_1->SetScale(750.0f);
   }
 
   auto generate_chunk(const glm::i32vec2& coord) -> Chunk {
@@ -36,8 +53,8 @@ public:
     chunk.blocks.resize(Chunk::size * Chunk::height * Chunk::size);
     chunk.state = Chunk::State::terrain_generated;
 
-    constexpr int min_height = 32;
-    constexpr int sea_level = 63;
+    constexpr int min_height = 48;
+    constexpr int sea_level = 100;
 
     for (auto x = 0; x < Chunk::size; ++x) {
       for (auto z = 0; z < Chunk::size; ++z) {
@@ -47,17 +64,17 @@ public:
         chunk[x, 0, z] = Block::bedrock;
 
         auto h = m_height_noise->GenSingle2D(world_x, world_z, m_seed);
-        h = (h + 1.0f) / 2.0f; // Normalize to [0, 1]
-        h = std::pow(h, 1.4f); // Exaggerate heights
+        h = (h + m_height_noise_max_amplitude) / (2.0f * m_height_noise_max_amplitude); // h is now in [0, 1]
 
         auto height = (int)(h * (Chunk::height - 1 - min_height - 1)) + min_height - 1;
         height = std::clamp(height, min_height - 1, Chunk::height - 1);
 
         // Fill ground
         for (auto y = 1; y < height - 5; ++y) {
-          auto cheese = m_cheese_cave_noise->GenSingle3D(world_x, (float)y, world_z, m_seed);
-
-          if (cheese > 0.0f) {
+          auto cheese = m_cheese_cave_noise->GenSingle3D(world_x, y * 5.0f, world_z, m_seed);
+          auto spaghetti_0 = m_spaghetti_cave_noise_0->GenSingle3D(world_x * 2.0f, y * 6.0f, world_z, m_seed);
+          auto spaghetti_1 = m_spaghetti_cave_noise_1->GenSingle3D(world_x * 1.5f, y * 8.0f, world_z, m_seed);
+          if (cheese > 0.8f || std::abs(spaghetti_0) + std::abs(spaghetti_1) < 0.14f) {
             chunk[x, y, z] = Block::air;
           }
           else {

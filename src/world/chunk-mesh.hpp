@@ -17,6 +17,7 @@ public:
     glm::vec3 position;
     glm::vec2 uv;
     int layer;
+    float ao;
   };
 
   ChunkMesh() : m_vertex_count{0}, m_vbo{0u}, m_vao{0u} {}
@@ -44,6 +45,9 @@ public:
 
     glVertexAttribPointer(2, 1, GL_INT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, layer));
     glEnableVertexAttribArray(2);
+
+    glVertexAttribPointer(3, 1, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, ao));
+    glEnableVertexAttribArray(3);
 
     glBindBuffer(GL_ARRAY_BUFFER, 0);
     glBindVertexArray(0);

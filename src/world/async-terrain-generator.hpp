@@ -18,12 +18,12 @@ public:
     }
   };
 
-  struct CompleteJob {
+  struct CompleteTask {
     glm::i32vec2 coord;
     double priority;
     Chunk chunk;
 
-    auto operator<(const CompleteJob& other) const -> bool {
+    auto operator<(const CompleteTask& other) const -> bool {
       return priority < other.priority;
     }
   };
@@ -31,7 +31,7 @@ private:
   TerrainGenerator m_generator;
   std::vector<std::thread> m_threads;
   ConcurrentPriorityQueue<Request> m_request_queue;
-  ConcurrentPriorityQueue<CompleteJob> m_finished_queue;
+  ConcurrentPriorityQueue<CompleteTask> m_finished_queue;
 public:
   explicit AsyncTerrainGenerator(int seed) : m_generator{seed} {
     auto threads = std::thread::hardware_concurrency();
@@ -63,7 +63,7 @@ public:
     m_request_queue.push(req);
   }
 
-  auto get() -> std::optional<CompleteJob> {
+  auto get() -> std::optional<CompleteTask> {
     return m_finished_queue.try_pop();
   }
 };

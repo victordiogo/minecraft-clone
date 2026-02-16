@@ -6,14 +6,16 @@
 #include <cassert>
 #include <cmath>
 
+// should match order of layers in blocks' texture
+// air should be the last
 enum class Block {
-  air,
   grass,
   dirt,
   stone,
   water,
   bedrock,
-  sand
+  sand,
+  air
 };
 
 struct Chunk {
@@ -45,10 +47,19 @@ struct Chunk {
   }
 };
 
+struct ChunkNeighbors {
+  Chunk& north;
+  Chunk& north_east;
+  Chunk& east;
+  Chunk& south_east;
+  Chunk& south;
+  Chunk& south_west;
+  Chunk& west;
+  Chunk& north_west;
+};
+
 // receives neighboring chunks in order:
 // north is -z, south is +z, east is +x, west is -x
-auto generate_mesh(const Chunk& chunk, const glm::i32vec2& coord, 
-                   const Chunk& north, const Chunk& south, 
-                   const Chunk& west, const Chunk& east) -> ChunkMesh;
+auto generate_mesh(const Chunk& chunk, const glm::i32vec2& coord, const ChunkNeighbors& neighbors) -> ChunkMesh;
 
 #endif

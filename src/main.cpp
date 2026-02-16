@@ -137,7 +137,7 @@ auto main() -> int {
 
   auto blocks_texture = load_blocks_texture();
   auto shader = Shader{"../shaders/chunk.vert", "../shaders/chunk.frag"};
-  auto world = World{3289, 20};
+  auto world = World{3289, 10};
   
   auto frame_monitor = FrameMonitor{};
   while (!glfwWindowShouldClose(window.get())) {

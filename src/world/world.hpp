@@ -61,15 +61,6 @@ public:
     gen_meshes();                
   }
 
-  auto get_neighbors(const glm::i32vec2& coord) -> auto {
-    auto north = m_chunks.find({coord.x, coord.y - 1});
-    auto south = m_chunks.find({coord.x, coord.y + 1});
-    auto west = m_chunks.find({coord.x - 1, coord.y});
-    auto east = m_chunks.find({coord.x + 1, coord.y});
-
-    return std::array{north, south, west, east};
-  }
-
   auto unload_chunks(const glm::i32vec2& center) -> void {
     auto unloads = 0;
     for (auto it = m_chunks.begin(); it != m_chunks.end(); ) {
@@ -97,6 +88,19 @@ public:
         }
       }
     }
+  }
+
+  auto get_neighbors(const glm::i32vec2& coord) -> auto {
+    auto north = m_chunks.find({coord.x, coord.y - 1});
+    auto north_east = m_chunks.find({coord.x + 1, coord.y - 1});
+    auto east = m_chunks.find({coord.x + 1, coord.y});
+    auto south_east = m_chunks.find({coord.x + 1, coord.y + 1});
+    auto south = m_chunks.find({coord.x, coord.y + 1});
+    auto south_west = m_chunks.find({coord.x - 1, coord.y + 1});
+    auto west = m_chunks.find({coord.x - 1, coord.y});
+    auto north_west = m_chunks.find({coord.x - 1, coord.y - 1});
+
+    return std::array{north, north_east, east, south_east, south, south_west, west, north_west};
   }
 
   auto get_terrain_generated_chunks() -> void {
@@ -144,14 +148,29 @@ public:
       
       auto& chunk = it->second;
 
-      auto [north, south, west, east] = get_neighbors(coord);
+      auto neighbors = get_neighbors(coord);
 
-      if (north == m_chunks.end() || north->second.state < Chunk::State::terrain_generated) continue;
-      if (south == m_chunks.end() || south->second.state < Chunk::State::terrain_generated) continue;
-      if (west == m_chunks.end() || west->second.state < Chunk::State::terrain_generated) continue;
-      if (east == m_chunks.end() || east->second.state < Chunk::State::terrain_generated) continue;
+      auto should_skip = false;
+      for (auto neighbor : neighbors) {
+        if (neighbor == m_chunks.end() || neighbor->second.state < Chunk::State::terrain_generated) {
+          should_skip = true;
+          break;
+        }
+      }
+      if (should_skip) continue; // neighbors might have been unloaded while waiting for mesh generation
 
-      chunk.mesh = generate_mesh(chunk, coord, north->second, south->second, west->second, east->second);
+      auto chunk_neighbors = ChunkNeighbors{
+        .north = neighbors[0]->second,
+        .north_east = neighbors[1]->second,
+        .east = neighbors[2]->second,
+        .south_east = neighbors[3]->second,
+        .south = neighbors[4]->second,
+        .south_west = neighbors[5]->second,
+        .west = neighbors[6]->second,
+        .north_west = neighbors[7]->second
+      };
+
+      chunk.mesh = generate_mesh(chunk, coord, chunk_neighbors);
       chunk.state = Chunk::State::mesh_generated;
       ++generated_meshes;
     }
