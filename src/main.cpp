@@ -4,6 +4,7 @@
 #include "window/glfw.hpp"
 #include "window/window.hpp"
 #include "frame-monitor.hpp"
+#include "block-highlight.hpp"
 #include <glad/gl.h>
 #include <GLFW/glfw3.h>
 #include <stb_image.h>
@@ -14,7 +15,7 @@
 #include <stdexcept>
  
 auto process_input(const Window& window, Camera& camera, float frame_time) -> void {
-  auto camera_speed = 50.0f;
+  auto camera_speed = 5.0f;
 
   if (glfwGetKey(window.get(), GLFW_KEY_ESCAPE) == GLFW_PRESS)
     glfwSetInputMode(window.get(), GLFW_CURSOR, GLFW_CURSOR_NORMAL);
@@ -39,30 +40,6 @@ auto process_input(const Window& window, Camera& camera, float frame_time) -> vo
 
   if (glfwGetKey(window.get(), GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS)
     camera.move(Movement::down, camera_speed * frame_time);
-}
-
-auto load_blocks_texture() -> unsigned {
-  int width, height, num_channels;
-  auto* data = stbi_load("../assets/blocks.png", &width, &height, &num_channels, 0);
-  if (!data) throw std::runtime_error{"Failed to load texture image"};
-
-  unsigned texture_id;
-  glGenTextures(1, &texture_id);
-  glBindTexture(GL_TEXTURE_2D_ARRAY, texture_id);
-
-  glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_WRAP_S, GL_REPEAT);
-  glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_WRAP_T, GL_REPEAT);
-  glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MIN_FILTER, GL_NEAREST_MIPMAP_NEAREST);
-  glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-  glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_BASE_LEVEL, 0);
-  glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MAX_LEVEL, 4);
-
-  glTexImage3D(GL_TEXTURE_2D_ARRAY, 0, GL_SRGB8_ALPHA8, width, height / 7, 7, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
-  glGenerateMipmap(GL_TEXTURE_2D_ARRAY);
-  
-  stbi_image_free(data);
-
-  return texture_id;
 }
 
 auto calculate_offset(double x, double y) -> glm::vec2 {
@@ -112,9 +89,11 @@ auto main() -> int {
   glEnable(GL_DEPTH_TEST);
   glEnable(GL_CULL_FACE);
   glCullFace(GL_BACK);
+  glEnable(GL_BLEND);
+  glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
   auto size = window.size();
-  auto camera = Camera{{0.0f, 5.0f, 1.0f}, 0.0f, -90.0f, 0.1f, 45.0f, (float)size.x / size.y};
+  auto camera = Camera{{0.0f, 0.0f, 0.0f}, 0.0f, -90.0f, 0.1f, 45.0f, (float)size.x / size.y};
 
   window.set_framebuffer_size_callback([&camera](GLFWwindow*, int width, int height) {
     glViewport(0, 0, width, height);
@@ -135,9 +114,8 @@ auto main() -> int {
     }
   });
 
-  auto blocks_texture = load_blocks_texture();
-  auto shader = Shader{"../shaders/chunk.vert", "../shaders/chunk.frag"};
   auto world = World{3289, 10};
+  auto block_highlight = BlockHighlight{};
   
   auto frame_monitor = FrameMonitor{};
   while (!glfwWindowShouldClose(window.get())) {
@@ -150,11 +128,15 @@ auto main() -> int {
 
     world.update(camera.position, camera.front());
 
-    shader.use();
     auto projection_view = camera.projection_matrix() * camera.view_matrix();
-    shader.set_uniform("u_projection_view", projection_view);
-    glBindTexture(GL_TEXTURE_2D_ARRAY, blocks_texture);
-    world.draw();
+  
+    world.draw(camera.position, projection_view);
+
+    if (auto res = world.cast_ray(camera.position, camera.front(), 10.0f)) {
+      auto& [block_pos, block_type] = *res;
+      block_highlight.position = block_pos;
+      block_highlight.draw(projection_view);
+    }
 
     glfwSwapBuffers(window.get());
     glfwPollEvents();

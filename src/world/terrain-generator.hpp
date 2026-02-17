@@ -7,8 +7,6 @@
 #include <algorithm>
 #include <cassert>
 
-#include <print>
-
 class TerrainGenerator {
 private:
   int m_seed;
@@ -27,7 +25,7 @@ public:
   {
     auto base = FastNoise::New<FastNoise::Simplex>();
     base->SetSeedOffset(0);
-    base->SetScale(2000.0f);
+    base->SetScale(2500.0f);
 
     auto h_octaves = 5;
     auto h_gain = 0.5f;
@@ -36,7 +34,7 @@ public:
     m_height_noise->SetLacunarity(2.0f);
     m_height_noise->SetGain(h_gain);
 
-    m_height_noise_max_amplitude = (1.0f - std::pow(h_gain, h_octaves)) / (1.0f - h_gain);
+    m_height_noise_max_amplitude = (1.0f - (float)std::pow(h_gain, h_octaves)) / (1.0f - h_gain);
 
     m_cheese_cave_noise->SetSeedOffset(1000);
     m_cheese_cave_noise->SetScale(250.0f);
@@ -50,8 +48,6 @@ public:
 
   auto generate_chunk(const glm::i32vec2& coord) -> Chunk {
     auto chunk = Chunk{};
-    chunk.blocks.resize(Chunk::size * Chunk::height * Chunk::size);
-    chunk.state = Chunk::State::terrain_generated;
 
     constexpr int min_height = 48;
     constexpr int sea_level = 100;
@@ -72,9 +68,9 @@ public:
         // Fill ground
         for (auto y = 1; y < height - 5; ++y) {
           auto cheese = m_cheese_cave_noise->GenSingle3D(world_x, y * 5.0f, world_z, m_seed);
-          auto spaghetti_0 = m_spaghetti_cave_noise_0->GenSingle3D(world_x * 2.0f, y * 6.0f, world_z, m_seed);
-          auto spaghetti_1 = m_spaghetti_cave_noise_1->GenSingle3D(world_x * 1.5f, y * 8.0f, world_z, m_seed);
-          if (cheese > 0.8f || std::abs(spaghetti_0) + std::abs(spaghetti_1) < 0.14f) {
+          auto spaghetti_0 = m_spaghetti_cave_noise_0->GenSingle3D(world_x * 2.0f, y * 5.0f, world_z, m_seed);
+          auto spaghetti_1 = m_spaghetti_cave_noise_1->GenSingle3D(world_x * 1.5f, y * 6.0f, world_z, m_seed);
+          if (cheese > 0.8f || spaghetti_0 * spaghetti_0 + spaghetti_1 * spaghetti_1 < 0.005f) {
             chunk[x, y, z] = Block::air;
           }
           else {

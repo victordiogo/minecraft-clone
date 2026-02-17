@@ -35,7 +35,7 @@ private:
 public:
   explicit AsyncTerrainGenerator(int seed) : m_generator{seed} {
     auto threads = std::thread::hardware_concurrency();
-    auto terrain_threads = std::max(1u, threads / 2u);
+    auto terrain_threads = std::max(1u, threads - 2u);
 
     for (auto i = 0u; i < terrain_threads; ++i) {
       m_threads.emplace_back([this]() {
@@ -53,9 +53,8 @@ public:
   ~AsyncTerrainGenerator() {
     m_request_queue.close();
     for (auto& thread : m_threads) {
-      if (thread.joinable()) {
+      if (thread.joinable())
         thread.join();
-      }
     }
   }
 
