@@ -29,20 +29,18 @@ private:
   float m_vertical_fov; // in degrees
   float m_aspect_ratio;
   float m_near;
-  float m_far;
 
 public:
   Camera(const glm::vec3& position, float pitch, float yaw, 
          float sensitivity, float vertical_fov, float aspect_ratio, 
-         float near = 0.1f, float far = 1000.0f)
+         float near = 0.1f)
     : position{position},
       m_pitch{pitch},
       m_yaw{yaw},
       m_sensitivity{sensitivity},
       m_vertical_fov{vertical_fov},
       m_aspect_ratio{aspect_ratio},
-      m_near{near},
-      m_far{far}
+      m_near{near}
   {
     if (m_pitch > 89.9f || m_pitch < -89.9f)
       throw std::out_of_range{"Camera pitch must be between -89.9 and 89.9 degrees"};
@@ -59,9 +57,6 @@ public:
     if (m_near <= 0.0f)
       throw std::out_of_range{"Camera near plane must be greater than 0"};
 
-    if (m_far <= m_near)
-      throw std::out_of_range{"Camera far plane must be greater than near plane"};
-
     update_vectors(); // Initialize front, right, and up vectors
   }
 
@@ -69,8 +64,15 @@ public:
     return glm::lookAt(position, position + m_front, m_up);
   }
 
+  // infinite reversed-z projection matrix
   auto projection_matrix() const -> glm::mat4 {
-    return glm::perspective(glm::radians(m_vertical_fov), m_aspect_ratio, m_near, m_far);
+    auto f = 1.0f / std::tan(glm::radians(m_vertical_fov) / 2.0f);
+    auto mat = glm::mat4{0.0f};
+    mat[0][0] = f / m_aspect_ratio;
+    mat[1][1] = f;
+    mat[3][2] = m_near;
+    mat[2][3] = -1.0f;
+    return mat;
   }
 
   auto front() const -> const glm::vec3& {

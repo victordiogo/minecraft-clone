@@ -91,6 +91,9 @@ auto main() -> int {
   glCullFace(GL_BACK);
   glEnable(GL_BLEND);
   glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+  // reversed-z
+  glDepthFunc(GL_GREATER);
+  glClearDepth(0.0f);
 
   auto size = window.size();
   auto camera = Camera{{0.0f, 0.0f, 0.0f}, 0.0f, -90.0f, 0.1f, 45.0f, (float)size.x / size.y};
