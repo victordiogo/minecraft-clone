@@ -74,9 +74,12 @@ public:
       throw std::invalid_argument{"Render distance must be at least 1"};
   }
 
-  auto draw(const glm::vec3& position, const glm::mat4& projection_view) const -> void {
+  auto draw(const glm::vec3& position, const glm::mat4& projection_view, const glm::mat4& view, const glm::vec3& fog_color) const -> void {
     m_shader.use();
     m_shader.set_uniform("u_projection_view", projection_view);
+    m_shader.set_uniform("u_view", view);
+    m_shader.set_uniform("u_render_distance", (float)m_render_distance * Chunk::size);
+    m_shader.set_uniform("u_fog_color", fog_color);
     glBindTexture(GL_TEXTURE_2D_ARRAY, m_blocks_texture.id());
     auto center = to_chunk_coord(position.x, position.z);
     for (const auto& [coord, chunk] : m_chunks) {

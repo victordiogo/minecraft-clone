@@ -3,6 +3,7 @@
 
 #include <glad/gl.h>
 #include <glm/mat4x4.hpp>
+#include <glm/vec3.hpp>
 #include <string>
 #include <fstream>
 #include <print>
@@ -125,6 +126,10 @@ public:
 
   auto set_uniform(const std::string& name, float value) const -> void {
     glUniform1f(glGetUniformLocation(m_id, name.c_str()), value);
+  }
+
+  auto set_uniform(const std::string& name, const glm::vec3& value) const -> void {
+    glUniform3fv(glGetUniformLocation(m_id, name.c_str()), 1, &value[0]);
   }
 
   auto set_uniform(const std::string& name, const glm::mat4& value) const -> void {

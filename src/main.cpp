@@ -8,6 +8,7 @@
 #include <glad/gl.h>
 #include <GLFW/glfw3.h>
 #include <stb_image.h>
+#include <glm/vec3.hpp>
 #include <iostream>
 #include <print>
 #include <array>
@@ -15,7 +16,7 @@
 #include <stdexcept>
  
 auto process_input(const Window& window, Camera& camera, float frame_time) -> void {
-  auto camera_speed = 5.0f;
+  auto camera_speed = 50.0f;
 
   if (glfwGetKey(window.get(), GLFW_KEY_ESCAPE) == GLFW_PRESS)
     glfwSetInputMode(window.get(), GLFW_CURSOR, GLFW_CURSOR_NORMAL);
@@ -85,7 +86,7 @@ auto main() -> int {
     return -1;
   }
   
-  glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
+  glClearColor(0.429f, 0.608f, 0.922f, 1.0f);
   glEnable(GL_DEPTH_TEST);
   glEnable(GL_CULL_FACE);
   glCullFace(GL_BACK);
@@ -133,7 +134,7 @@ auto main() -> int {
 
     auto projection_view = camera.projection_matrix() * camera.view_matrix();
   
-    world.draw(camera.position, projection_view);
+    world.draw(camera.position, projection_view, camera.view_matrix(), glm::vec3{0.429f, 0.608f, 0.922f});
 
     if (auto res = world.cast_ray(camera.position, camera.front(), 10.0f)) {
       auto& [block_pos, block_type] = *res;
