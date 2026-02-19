@@ -4,7 +4,7 @@
 #include "window/glfw.hpp"
 #include "window/window.hpp"
 #include "frame-monitor.hpp"
-#include "block-highlight.hpp"
+#include "block-outline.hpp"
 #include <glad/gl.h>
 #include <GLFW/glfw3.h>
 #include <stb_image.h>
@@ -118,8 +118,8 @@ auto main() -> int {
     }
   });
 
-  auto world = World{3289, 10};
-  auto block_highlight = BlockHighlight{};
+  auto world = World{3289, 25};
+  auto block_outline = BlockOutline{};
   
   auto frame_monitor = FrameMonitor{};
   while (!glfwWindowShouldClose(window.get())) {
@@ -134,12 +134,12 @@ auto main() -> int {
 
     auto projection_view = camera.projection_matrix() * camera.view_matrix();
   
-    world.draw(camera.position, projection_view, camera.view_matrix(), glm::vec3{0.429f, 0.608f, 0.922f});
+    world.draw(camera.position, projection_view, camera.view_matrix(), glm::vec3{0.429f, 0.608f, 0.922f}, camera);
 
     if (auto res = world.cast_ray(camera.position, camera.front(), 10.0f)) {
       auto& [block_pos, block_type] = *res;
-      block_highlight.position = block_pos;
-      block_highlight.draw(projection_view);
+      block_outline.position = block_pos;
+      block_outline.draw(projection_view);
     }
 
     glfwSwapBuffers(window.get());

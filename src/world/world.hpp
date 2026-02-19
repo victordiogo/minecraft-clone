@@ -4,8 +4,9 @@
 #include "chunk.hpp"
 #include "chunk-mesh.hpp"
 #include "shader.hpp"
-#include "texture-2d-array.hpp"
+#include "gl/texture.hpp"
 #include "async-terrain-generator.hpp"
+#include "camera.hpp"
 #include <glm/vec3.hpp>
 #include <glm/vec2.hpp>
 #include <glm/geometric.hpp>
@@ -55,6 +56,29 @@ struct ChunkEntry {
   std::optional<ChunkMesh> mesh;
 };
 
+auto load_blocks_texture() -> Texture {
+  int width, height, num_channels;
+  auto* data = stbi_load("../assets/blocks.png", &width, &height, &num_channels, 0);
+  if (!data) throw std::runtime_error{"Failed to load texture image"};
+
+  auto texture = Texture{};
+  glBindTexture(GL_TEXTURE_2D_ARRAY, texture.id());
+
+  glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_WRAP_S, GL_REPEAT);
+  glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_WRAP_T, GL_REPEAT);
+  glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MIN_FILTER, GL_NEAREST_MIPMAP_NEAREST);
+  glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+  glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_BASE_LEVEL, 0);
+  glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MAX_LEVEL, 4);
+
+  auto num_layers = height / 16;
+  glTexImage3D(GL_TEXTURE_2D_ARRAY, 0, GL_SRGB8_ALPHA8, width, height / num_layers, num_layers, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
+  glGenerateMipmap(GL_TEXTURE_2D_ARRAY);
+  
+  stbi_image_free(data);
+  return texture;
+}
+
 class World {
 private:
   int m_render_distance;
@@ -62,19 +86,19 @@ private:
   std::queue<glm::i32vec2> m_mesh_queue;
   ankerl::unordered_dense::map<glm::i32vec2, ChunkEntry> m_chunks;
   Shader m_shader;
-  Texture2DArray m_blocks_texture;
+  Texture m_blocks_texture;
 public:
   World(int seed, int render_distance) 
     : m_render_distance{render_distance}, 
       m_terrain_generator{seed},
       m_shader{"../shaders/chunk.vert", "../shaders/chunk.frag"},
-      m_blocks_texture{"../assets/blocks.png", 7}
+      m_blocks_texture{load_blocks_texture()}
   {
     if (render_distance < 1) 
       throw std::invalid_argument{"Render distance must be at least 1"};
   }
 
-  auto draw(const glm::vec3& position, const glm::mat4& projection_view, const glm::mat4& view, const glm::vec3& fog_color) const -> void {
+  auto draw(const glm::vec3& position, const glm::mat4& projection_view, const glm::mat4& view, const glm::vec3& fog_color, const Camera& camera) const -> void {
     m_shader.use();
     m_shader.set_uniform("u_projection_view", projection_view);
     m_shader.set_uniform("u_view", view);
@@ -82,9 +106,11 @@ public:
     m_shader.set_uniform("u_fog_color", fog_color);
     glBindTexture(GL_TEXTURE_2D_ARRAY, m_blocks_texture.id());
     auto center = to_chunk_coord(position.x, position.z);
+
     for (const auto& [coord, chunk] : m_chunks) {
       if (std::abs(coord.x - center.x) > m_render_distance || std::abs(coord.y - center.y) > m_render_distance) continue;
-      if (chunk.mesh) chunk.mesh->draw();
+      if (!chunk.mesh) continue;
+      chunk.mesh->draw();
     }
   }
 

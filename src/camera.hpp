@@ -79,6 +79,10 @@ public:
     return m_front;
   }
 
+  auto near() const -> float {
+    return m_near;
+  }
+
   auto set_aspect_ratio(float aspect_ratio) -> void {
     if (aspect_ratio <= 0.0f)
       throw std::out_of_range{"Camera aspect ratio must be greater than 0"};

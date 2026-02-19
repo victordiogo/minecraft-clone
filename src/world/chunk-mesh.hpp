@@ -170,7 +170,7 @@ public:
               uv.x += x_offset;
             }
 
-            auto chunk_world_pos = glm::ivec3{coord.x * Chunk::size, 0.0f, coord.y * Chunk::size};
+            auto translation = glm::ivec3{coord.x * Chunk::size, 0.0f, coord.y * Chunk::size};
 
             auto ao = std::array{0.1f, 0.25f, 0.5f, 1.0f};
             
@@ -179,7 +179,7 @@ public:
             auto v0_side2 = get_block(chunk, neighbors, block_pos + face.normal - face.u) != Block::air;
             auto v0_ao = vertex_ao(v0_corner, v0_side1, v0_side2);
             auto v0 = Vertex{
-              .position = face.point + chunk_world_pos, 
+              .position = face.point + translation, 
               .uv = uvs[0], 
               .layer = (int)block,
               .ao = ao[(unsigned)v0_ao]
@@ -190,7 +190,7 @@ public:
             auto v1_side2 = get_block(chunk, neighbors, block_pos + face.normal + face.r) != Block::air;
             auto v1_ao = vertex_ao(v1_corner, v1_side1, v1_side2);
             auto v1 = Vertex{
-              .position = face.point + face.r + chunk_world_pos, 
+              .position = face.point + face.r + translation, 
               .uv = uvs[1], 
               .layer = (int)block,
               .ao = ao[(unsigned)v1_ao]
@@ -201,7 +201,7 @@ public:
             auto v2_side2 = get_block(chunk, neighbors, block_pos + face.normal + face.u) != Block::air;
             auto v2_ao = vertex_ao(v2_corner, v2_side1, v2_side2);
             auto v2 = Vertex{
-              .position = face.point + face.r + face.u + chunk_world_pos, 
+              .position = face.point + face.r + face.u + translation, 
               .uv = uvs[2], 
               .layer = (int)block,
               .ao = ao[(unsigned)v2_ao]
@@ -212,7 +212,7 @@ public:
             auto v3_side2 = get_block(chunk, neighbors, block_pos + face.normal - face.r) != Block::air;
             auto v3_ao = vertex_ao(v3_corner, v3_side1, v3_side2);
             auto v3 = Vertex{
-              .position = face.point + face.u + chunk_world_pos,
+              .position = face.point + face.u + translation,
               .uv = uvs[3], 
               .layer = (int)block,
               .ao = ao[(unsigned)v3_ao]
@@ -228,6 +228,8 @@ public:
   }
 
   auto draw() const -> void {
+    if (m_num_vertices == 0) return;
+
     glBindVertexArray(m_vao.id());
     glDrawElements(GL_TRIANGLES, m_num_vertices, GL_UNSIGNED_INT, nullptr);
     glBindVertexArray(0);
