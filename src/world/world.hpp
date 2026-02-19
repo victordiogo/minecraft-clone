@@ -51,11 +51,6 @@ auto to_chunk_local(std::int32_t world_x, std::int32_t world_z) -> glm::i32vec2 
   return glm::i32vec2{local_x, local_z};
 }
 
-struct ChunkEntry {
-  std::optional<Chunk> chunk;
-  std::optional<ChunkMesh> mesh;
-};
-
 auto load_blocks_texture() -> Texture {
   int width, height, num_channels;
   auto* data = stbi_load("../assets/blocks.png", &width, &height, &num_channels, 0);
@@ -77,6 +72,60 @@ auto load_blocks_texture() -> Texture {
   
   stbi_image_free(data);
   return texture;
+}
+
+struct ChunkEntry {
+  std::optional<Chunk> chunk;
+  std::optional<ChunkMesh> mesh;
+};
+
+struct Plane {
+  glm::vec3 normal;
+  glm::vec3 point;
+};
+
+struct Frustum {
+  Plane near;
+  Plane top;
+  Plane bottom;
+  Plane left;
+  Plane right;
+};
+
+auto get_frustum(const Camera& camera) -> Frustum {
+  auto near_half_height = std::tan(glm::radians(camera.vertical_fov()) / 2.0f) * camera.near();
+  auto near_half_width = near_half_height * camera.aspect_ratio();
+  auto near_center = camera.position + camera.front() * camera.near();
+  auto near_tl = near_center + camera.up() * near_half_height - camera.right() * near_half_width;
+  auto near_tr = near_center + camera.up() * near_half_height + camera.right() * near_half_width;
+  auto near_bl = near_center - camera.up() * near_half_height - camera.right() * near_half_width;
+  auto near_br = near_center - camera.up() * near_half_height + camera.right() * near_half_width;
+  auto left_normal = glm::normalize(glm::cross(near_bl - camera.position, near_tl - camera.position));
+  auto right_normal = glm::normalize(glm::cross(near_tr - camera.position, near_br - camera.position));
+  auto top_normal = glm::normalize(glm::cross(near_tl - camera.position, near_tr - camera.position));
+  auto bottom_normal = glm::normalize(glm::cross(near_br - camera.position, near_bl - camera.position));
+  auto frustum = Frustum{
+    {camera.front(), near_center},
+    {top_normal, camera.position},
+    {bottom_normal, camera.position},
+    {left_normal, camera.position},
+    {right_normal, camera.position}
+  };
+  return frustum;
+}
+
+auto aabb_in_frustum(const glm::vec3& min, const glm::vec3& max, const Frustum& frustum) -> bool {
+  auto planes = std::array{frustum.near, frustum.top, frustum.bottom, frustum.left, frustum.right};
+  for (const auto& plane : planes) {
+    auto p = min;
+    if (plane.normal.x >= 0) p.x = max.x;
+    if (plane.normal.y >= 0) p.y = max.y;
+    if (plane.normal.z >= 0) p.z = max.z;
+    if (glm::dot(plane.normal, p - plane.point) < 0) {
+      return false;
+    }
+  }
+  return true;
 }
 
 class World {
@@ -107,9 +156,14 @@ public:
     glBindTexture(GL_TEXTURE_2D_ARRAY, m_blocks_texture.id());
     auto center = to_chunk_coord(position.x, position.z);
 
+    auto frustum = get_frustum(camera);
+
     for (const auto& [coord, chunk] : m_chunks) {
       if (std::abs(coord.x - center.x) > m_render_distance || std::abs(coord.y - center.y) > m_render_distance) continue;
       if (!chunk.mesh) continue;
+      auto chunk_min = glm::vec3{coord.x * Chunk::size, 0, coord.y * Chunk::size};
+      auto chunk_max = chunk_min + glm::vec3{Chunk::size, Chunk::height, Chunk::size};
+      if (!aabb_in_frustum(chunk_min, chunk_max, frustum)) continue;
       chunk.mesh->draw();
     }
   }

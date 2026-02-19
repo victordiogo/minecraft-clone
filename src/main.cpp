@@ -118,9 +118,9 @@ auto main() -> int {
     }
   });
 
-  auto world = World{3289, 25};
+  auto world = World{3289, 40};
   auto block_outline = BlockOutline{};
-  
+
   auto frame_monitor = FrameMonitor{};
   while (!glfwWindowShouldClose(window.get())) {
     auto frame_time = frame_monitor.tick();

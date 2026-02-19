@@ -79,8 +79,24 @@ public:
     return m_front;
   }
 
+  auto right() const -> const glm::vec3& {
+    return m_right;
+  }
+
+  auto up() const -> const glm::vec3& {
+    return m_up;
+  }
+
   auto near() const -> float {
     return m_near;
+  }
+
+  auto vertical_fov() const -> float {
+    return m_vertical_fov;
+  }
+
+  auto aspect_ratio() const -> float {
+    return m_aspect_ratio;
   }
 
   auto set_aspect_ratio(float aspect_ratio) -> void {
