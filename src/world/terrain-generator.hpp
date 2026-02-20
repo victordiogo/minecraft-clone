@@ -92,8 +92,7 @@ public:
 
         chunk[x, height, z] = surface_block;
 
-        if (x == 0 || z == 0) chunk[x, height, z] = Block::bedrock; // to see chunk borders
-        if (x == Chunk::size - 1 || z == Chunk::size - 1) chunk[x, height, z] = Block::stone; // to see chunk borders
+        // if (x == 0 || z == 0) chunk[x, height, z] = Block::bedrock; // to see chunk borders
 
         for (auto y = height + 1; y <= sea_level; ++y) {
           chunk[x, y, z] = Block::water;
