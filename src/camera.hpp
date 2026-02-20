@@ -16,6 +16,19 @@ enum class Movement {
   down
 };
 
+struct Plane {
+  glm::vec3 normal;
+  glm::vec3 point;
+};
+
+struct Frustum {
+  Plane near;
+  Plane top;
+  Plane bottom;
+  Plane left;
+  Plane right;
+};
+
 class Camera {
 public:
   glm::vec3 position;
@@ -129,6 +142,28 @@ public:
     if (m_pitch < -89.9f) m_pitch = -89.9f;
     
     update_vectors();
+  }
+
+  auto frustum() const -> Frustum {
+    auto near_half_height = std::tan(glm::radians(m_vertical_fov) / 2.0f) * m_near;
+    auto near_half_width = near_half_height * m_aspect_ratio;
+    auto near_center = position + m_front * m_near;
+    auto near_tl = near_center + m_up * near_half_height - m_right * near_half_width;
+    auto near_tr = near_center + m_up * near_half_height + m_right * near_half_width;
+    auto near_bl = near_center - m_up * near_half_height - m_right * near_half_width;
+    auto near_br = near_center - m_up * near_half_height + m_right * near_half_width;
+    auto left_normal = glm::normalize(glm::cross(near_bl - position, near_tl - position));
+    auto right_normal = glm::normalize(glm::cross(near_tr - position, near_br - position));
+    auto top_normal = glm::normalize(glm::cross(near_tl - position, near_tr - position));
+    auto bottom_normal = glm::normalize(glm::cross(near_br - position, near_bl - position));
+    auto frustum = Frustum{
+      {m_front, near_center},
+      {top_normal, position},
+      {bottom_normal, position},
+      {left_normal, position},
+      {right_normal, position}
+    };
+    return frustum;
   }
   
 private:

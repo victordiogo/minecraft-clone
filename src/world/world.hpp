@@ -3,7 +3,7 @@
 
 #include "chunk.hpp"
 #include "chunk-mesh.hpp"
-#include "shader.hpp"
+#include "gl/shader.hpp"
 #include "gl/texture.hpp"
 #include "async-terrain-generator.hpp"
 #include "camera.hpp"
@@ -11,7 +11,7 @@
 #include <glm/vec2.hpp>
 #include <glm/geometric.hpp>
 #include <ankerl/unordered_dense.h>
-#include <queue>
+#include <list>
 #include <cmath>
 #include <stdexcept>
 #include <cassert>
@@ -79,41 +79,6 @@ struct ChunkEntry {
   std::optional<ChunkMesh> mesh;
 };
 
-struct Plane {
-  glm::vec3 normal;
-  glm::vec3 point;
-};
-
-struct Frustum {
-  Plane near;
-  Plane top;
-  Plane bottom;
-  Plane left;
-  Plane right;
-};
-
-auto get_frustum(const Camera& camera) -> Frustum {
-  auto near_half_height = std::tan(glm::radians(camera.vertical_fov()) / 2.0f) * camera.near();
-  auto near_half_width = near_half_height * camera.aspect_ratio();
-  auto near_center = camera.position + camera.front() * camera.near();
-  auto near_tl = near_center + camera.up() * near_half_height - camera.right() * near_half_width;
-  auto near_tr = near_center + camera.up() * near_half_height + camera.right() * near_half_width;
-  auto near_bl = near_center - camera.up() * near_half_height - camera.right() * near_half_width;
-  auto near_br = near_center - camera.up() * near_half_height + camera.right() * near_half_width;
-  auto left_normal = glm::normalize(glm::cross(near_bl - camera.position, near_tl - camera.position));
-  auto right_normal = glm::normalize(glm::cross(near_tr - camera.position, near_br - camera.position));
-  auto top_normal = glm::normalize(glm::cross(near_tl - camera.position, near_tr - camera.position));
-  auto bottom_normal = glm::normalize(glm::cross(near_br - camera.position, near_bl - camera.position));
-  auto frustum = Frustum{
-    {camera.front(), near_center},
-    {top_normal, camera.position},
-    {bottom_normal, camera.position},
-    {left_normal, camera.position},
-    {right_normal, camera.position}
-  };
-  return frustum;
-}
-
 auto aabb_in_frustum(const glm::vec3& min, const glm::vec3& max, const Frustum& frustum) -> bool {
   auto planes = std::array{frustum.near, frustum.top, frustum.bottom, frustum.left, frustum.right};
   for (const auto& plane : planes) {
@@ -132,7 +97,7 @@ class World {
 private:
   int m_render_distance;
   AsyncTerrainGenerator m_terrain_generator;
-  std::queue<glm::i32vec2> m_mesh_queue;
+  std::list<glm::i32vec2> m_mesh_queue;
   ankerl::unordered_dense::map<glm::i32vec2, ChunkEntry> m_chunks;
   Shader m_shader;
   Texture m_blocks_texture;
@@ -156,7 +121,7 @@ public:
     glBindTexture(GL_TEXTURE_2D_ARRAY, m_blocks_texture.id());
     auto center = to_chunk_coord(position.x, position.z);
 
-    auto frustum = get_frustum(camera);
+    auto frustum = camera.frustum();
 
     for (const auto& [coord, chunk] : m_chunks) {
       if (std::abs(coord.x - center.x) > m_render_distance || std::abs(coord.y - center.y) > m_render_distance) continue;
@@ -176,24 +141,25 @@ public:
     gen_meshes();                
   }
 
-  auto cast_ray(const glm::vec3& origin, const glm::vec3& in_dir, float max_distance) const -> std::optional<std::pair<glm::i32vec3, Block>> {
-    auto dir = glm::normalize(in_dir);
+  // dir should be non zero and normalized
+  auto cast_ray(const glm::vec3& origin, glm::vec3 dir, float max_distance) const -> std::optional<std::pair<glm::i32vec3, Block>> {
+    assert(std::abs(glm::length(dir) - 1.0f) < 0.001f);
     auto current = glm::i32vec3{
       (std::int32_t)std::floor(origin.x), 
       (std::int32_t)std::floor(origin.y), 
       (std::int32_t)std::floor(origin.z)
     };
     auto q = current; // lies at next plane boundary
-    q.x += (dir.x > 0) ? 1 : 0;
-    q.y += (dir.y > 0) ? 1 : 0;
-    q.z += (dir.z > 0) ? 1 : 0;
+    q.x += (dir.x >= 0.0f) ? 1 : 0;
+    q.y += (dir.y >= 0.0f) ? 1 : 0;
+    q.z += (dir.z >= 0.0f) ? 1 : 0;
 
     auto t_max = (glm::vec3{q} - origin) / dir; // distance to next plane boundary
-    auto t_delta = glm::abs(1.0f / dir); // distance between plane boundaries
+    auto t_delta = 1.0f / glm::abs(dir); // distance between plane boundaries
 
     auto traveled = 0.0f;
     while (traveled <= max_distance) {
-      auto chunk_coord = glm::i32vec2{std::floor((float)current.x / Chunk::size), std::floor((float)current.z / Chunk::size)};
+      auto chunk_coord = to_chunk_coord((float)current.x, (float)current.z);
       auto it = m_chunks.find(chunk_coord);
       if (it != m_chunks.end() && it->second.chunk && current.y >= 0 && current.y < Chunk::height) {
         auto& chunk = *it->second.chunk;
@@ -222,6 +188,71 @@ public:
     }
 
     return {};
+  }
+
+  auto get_neighbors(const glm::i32vec2& coord) -> auto {
+    auto north = m_chunks.find({coord.x, coord.y - 1});
+    auto north_east = m_chunks.find({coord.x + 1, coord.y - 1});
+    auto east = m_chunks.find({coord.x + 1, coord.y});
+    auto south_east = m_chunks.find({coord.x + 1, coord.y + 1});
+    auto south = m_chunks.find({coord.x, coord.y + 1});
+    auto south_west = m_chunks.find({coord.x - 1, coord.y + 1});
+    auto west = m_chunks.find({coord.x - 1, coord.y});
+    auto north_west = m_chunks.find({coord.x - 1, coord.y - 1});
+
+    return std::array{north, north_east, east, south_east, south, south_west, west, north_west};
+  }
+
+  // returns true if sucessful
+  auto break_block(const glm::i32vec3& coord) -> bool {
+    if (coord.y < 0 || coord.y >= Chunk::height) return false;
+    auto chunk_coord = to_chunk_coord((float)coord.x, (float)coord.z);
+    auto it = m_chunks.find(chunk_coord);
+    if (it == m_chunks.end() || !it->second.chunk) return false;
+    auto& chunk = *it->second.chunk;
+    auto local = to_chunk_local(coord.x, coord.z);
+    chunk[local.x, coord.y, local.y] = Block::air;
+    
+    // push corners (lower priority)
+    if (local.x == 0 && local.y == 0) {
+      auto north_west = glm::i32vec2{chunk_coord.x - 1, chunk_coord.y - 1};
+      m_mesh_queue.push_front(north_west);
+    }
+    else if (local.x == 0 && local.y == Chunk::size - 1) {
+      auto south_west = glm::i32vec2{chunk_coord.x - 1, chunk_coord.y + 1};
+      m_mesh_queue.push_front(south_west);
+    }
+    else if (local.x == Chunk::size - 1 && local.y == 0) {
+      auto north_east = glm::i32vec2{chunk_coord.x + 1, chunk_coord.y - 1};
+      m_mesh_queue.push_front(north_east);
+    }
+    else if (local.x == Chunk::size - 1 && local.y == Chunk::size - 1) {
+      auto south_east = glm::i32vec2{chunk_coord.x + 1, chunk_coord.y + 1};
+      m_mesh_queue.push_front(south_east);
+    }
+
+    // push parallel neighbors (higher priority)
+    if (local.x == 0) {
+      auto west = glm::i32vec2{chunk_coord.x - 1, chunk_coord.y};
+      m_mesh_queue.push_front(west);
+    }
+    else if (local.x == Chunk::size - 1) {
+      auto east = glm::i32vec2{chunk_coord.x + 1, chunk_coord.y};
+      m_mesh_queue.push_front(east);
+    }
+    if (local.y == 0) {
+      auto north = glm::i32vec2{chunk_coord.x, chunk_coord.y - 1};
+      m_mesh_queue.push_front(north);
+    }
+    else if (local.y == Chunk::size - 1) {
+      auto south = glm::i32vec2{chunk_coord.x, chunk_coord.y + 1};
+      m_mesh_queue.push_front(south);
+    }
+
+    // push self (highest priority)
+    m_mesh_queue.push_front(chunk_coord);
+
+    return true;
   }
 
   auto unload_chunks(const glm::i32vec2& center) -> void {
@@ -253,19 +284,6 @@ public:
     }
   }
 
-  auto get_neighbors(const glm::i32vec2& coord) -> auto {
-    auto north = m_chunks.find({coord.x, coord.y - 1});
-    auto north_east = m_chunks.find({coord.x + 1, coord.y - 1});
-    auto east = m_chunks.find({coord.x + 1, coord.y});
-    auto south_east = m_chunks.find({coord.x + 1, coord.y + 1});
-    auto south = m_chunks.find({coord.x, coord.y + 1});
-    auto south_west = m_chunks.find({coord.x - 1, coord.y + 1});
-    auto west = m_chunks.find({coord.x - 1, coord.y});
-    auto north_west = m_chunks.find({coord.x - 1, coord.y - 1});
-
-    return std::array{north, north_east, east, south_east, south, south_west, west, north_west};
-  }
-
   auto get_terrain_generated_chunks() -> void {
     while (auto job = m_terrain_generator.get()) {
       auto it = m_chunks.find(job->coord);
@@ -274,7 +292,7 @@ public:
       it->second.chunk = std::move(job->chunk);
 
       if (ready_to_mesh(it->first)) {
-        m_mesh_queue.push(it->first);
+        m_mesh_queue.push_back(it->first);
       }
 
       auto neighbors = get_neighbors(job->coord);
@@ -282,7 +300,7 @@ public:
       for (auto neighbor : neighbors) {
         if (neighbor == m_chunks.end()) continue;
         if (ready_to_mesh(neighbor->first))
-          m_mesh_queue.push(neighbor->first);
+          m_mesh_queue.push_back(neighbor->first);
       }
     }
   }
@@ -302,9 +320,10 @@ public:
 
   auto gen_meshes() -> void {
     auto generated_meshes = 0;
-    while (!m_mesh_queue.empty() && generated_meshes < 3) {
+    constexpr auto max_meshes_per_update = 3; // at least 3 to prevent block breaking showing empty faces
+    while (!m_mesh_queue.empty() && generated_meshes < max_meshes_per_update) { 
       auto coord = m_mesh_queue.front();
-      m_mesh_queue.pop();
+      m_mesh_queue.pop_front();
 
       auto it = m_chunks.find(coord);
       if (it == m_chunks.end() || !it->second.chunk) continue; // chunk was unloaded while waiting for mesh generation

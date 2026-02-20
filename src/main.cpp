@@ -1,10 +1,10 @@
 #include "world/world.hpp"
 #include "camera.hpp"
-#include "shader.hpp"
 #include "window/glfw.hpp"
 #include "window/window.hpp"
 #include "frame-monitor.hpp"
 #include "block-outline.hpp"
+#include "crosshair.hpp"
 #include <glad/gl.h>
 #include <GLFW/glfw3.h>
 #include <stb_image.h>
@@ -110,16 +110,22 @@ auto main() -> int {
     camera.rotate(offset);
   });
 
-  window.set_mouse_button_callback([](GLFWwindow* window, int button, int action, int) {
-    if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS) {
-      if (glfwGetInputMode(window, GLFW_CURSOR) == GLFW_CURSOR_DISABLED) return;
+  auto world = World{3289, 40};
+  auto block_outline = BlockOutline{};
+  auto looking_at_block = false;
+
+  window.set_mouse_button_callback([&](GLFWwindow* window, int button, int action, int) {
+    auto left_press = button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS;
+    if (left_press && glfwGetInputMode(window, GLFW_CURSOR) != GLFW_CURSOR_DISABLED) {
       glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
       reset_cursor_pos(window);
     }
+    else if (left_press && looking_at_block) {
+      world.break_block(block_outline.position);
+    }
   });
 
-  auto world = World{3289, 40};
-  auto block_outline = BlockOutline{};
+  auto crosshair = Crosshair{};
 
   auto frame_monitor = FrameMonitor{};
   while (!glfwWindowShouldClose(window.get())) {
@@ -140,7 +146,13 @@ auto main() -> int {
       auto& [block_pos, block_type] = *res;
       block_outline.position = block_pos;
       block_outline.draw(projection_view);
+      looking_at_block = true;
     }
+    else {
+      looking_at_block = false;
+    }
+
+    crosshair.draw(camera.aspect_ratio());
 
     glfwSwapBuffers(window.get());
     glfwPollEvents();

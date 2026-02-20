@@ -3,7 +3,7 @@
 
 #include "gl/vao.hpp"
 #include "gl/buffer-object.hpp"
-#include "shader.hpp"
+#include "gl/shader.hpp"
 #include "gl/texture.hpp"
 #include <glad/gl.h>
 #include <glm/vec3.hpp>
@@ -16,7 +16,7 @@
 
 class BlockOutline {
 public:
-  glm::vec3 position;
+  glm::i32vec3 position;
 private:
   Shader m_shader;
   Texture m_texture;
@@ -124,7 +124,7 @@ public:
 
   auto draw(const glm::mat4& projection_view) const -> void {
     m_shader.use();
-    auto model = glm::translate(glm::mat4{1.0f}, position);
+    auto model = glm::translate(glm::mat4{1.0f}, glm::vec3{position});
     auto proj_view_model = projection_view * model;
     m_shader.set_uniform("u_proj_view_model", proj_view_model);
     glBindTexture(GL_TEXTURE_2D, m_texture.id());
